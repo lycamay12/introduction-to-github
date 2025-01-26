@@ -1,0 +1,388 @@
+import tkinter as tk
+import sqlite3
+from tkinter import Frame
+from tkinter import messagebox
+from tkcalendar import Calendar
+import os
+
+current_user_id = None
+
+def initialize_database():
+    conn = sqlite3.connect("reservation_system.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            user_type TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            room TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def load_user_session():
+    global current_user_id
+    if os.path.exists("user_session.txt"):
+        with open("user_session.txt", "r") as f:
+            current_user_id = f.read().strip()
+
+def save_user_session(user_id):
+    with open("user_session.txt", "w") as f:
+        f.write(user_id)
+
+def execute_query(query, params=(), fetch=False):
+    conn = sqlite3.connect("reservation_system.db")
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    data = cursor.fetchall() if fetch else None
+    conn.commit()
+    conn.close()
+
+    print(f"Executed query: {query} with params {params}, fetched data: {data}")
+    return data
+
+
+def student_portal():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=login_portal)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+
+    user_id_var = tk.StringVar()
+    password_var = tk.StringVar()
+
+    def student_login():
+        global current_user_id
+        user_webmail = user_id_var.get()
+        password = password_var.get()
+        current_user_id = user_webmail
+
+        if not user_webmail or not password:
+            messagebox.showerror("Error", "All fields are required")
+            return
+
+        user = execute_query("SELECT * FROM users WHERE user_id = ? AND password = ? AND user_type = ?",
+                             (user_webmail, password, "Student"), fetch=True)
+
+        if user:
+            username = user[0][1]  # Get the username from the query result
+            current_user_id = user_webmail
+            messagebox.showinfo("Login success", f"Welcome student {username}")
+            main_page()
+        else:
+            messagebox.showerror("Error", "Invalid credentials")
+
+    tk.Label(root, text="Student User Login", font="Impact 35 bold", fg="#B75319", bg="#520D0D").pack(pady=(20, 0))
+    tk.Label(root, text="Please enter your credentials!", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(0, 10))
+    tk.Label(root, text="PUP webmail:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 380), pady=5)
+    tk.Entry(root, textvariable=user_id_var, width=44, font=("Goudy old style", 15)).pack(padx=0, pady=5)
+    tk.Label(root, text="Password:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 415), pady=5)
+    tk.Entry(root, textvariable=password_var, width=44, show="*", font=("Goudy old style", 15)).pack(padx=(0), pady=5)
+    tk.Button(root, text="Login", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=student_login).pack(padx=500, pady=(10))
+
+
+def faculty_portal():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    user_id_var = tk.StringVar()
+    password_var = tk.StringVar()
+
+    def faculty_login():
+        global current_user_id
+        user_webmail = user_id_var.get()
+        password = password_var.get()
+        current_user_id = user_webmail
+
+        if not user_webmail or not password:
+            messagebox.showerror("Error", "All fields are required")
+            return
+
+        user = execute_query("SELECT * FROM users WHERE user_id = ? AND password = ? AND user_type = ?",
+                             (user_webmail, password, "Faculty"), fetch=True)
+
+        if user:
+            current_user_id = user_webmail
+            messagebox.showinfo("Login success", f"Welcome faculty {user_webmail}")
+            main_page()
+        else:
+            messagebox.showerror("Error", "Invalid credentials")
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=login_portal)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+
+    tk.Label(root, text="Faculty User Login", font="Impact 35 bold", fg="#B75319", bg="#520D0D").pack(pady=(20, 0))
+    tk.Label(root, text="Please enter your credentials!", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(0, 10))
+    tk.Label(root, text="PUP webmail:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 380), pady=5)
+    tk.Entry(root, textvariable=user_id_var, width=44, font=("Goudy old style", 15)).pack(padx=0, pady=5)
+    tk.Label(root, text="Password:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 415), pady=5)
+    tk.Entry(root, textvariable=password_var, width=44, show="*", font=("Goudy old style", 15)).pack(padx=(0), pady=5)
+    tk.Button(root, text="Login", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=faculty_login).pack(padx=500, pady=(10))
+
+
+def create_account():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    user_type_var = tk.StringVar()
+    user_id_var = tk.StringVar()
+    password_var = tk.StringVar()
+    confirm_password_var = tk.StringVar()
+    username_var = tk.StringVar()
+
+    def save_account():
+        user_type = user_type_var.get()
+        user_webmail = user_id_var.get()
+        password = password_var.get()
+        confirm_password = confirm_password_var.get()
+        username = username_var.get()
+
+        if not user_type or not user_webmail or not password or not confirm_password or not username:
+            messagebox.showerror("Error", "All fields are required.")
+            return
+
+        if password != confirm_password:
+            messagebox.showerror("Error", "Passwords do not match.")
+            return
+
+        if len(password) < 8:
+            messagebox.showerror("Error", "Password must be at least 8 characters long.")
+            return
+
+
+        existing_user = execute_query("SELECT * FROM users WHERE user_id = ?", (user_webmail,), fetch=True)
+
+        if existing_user:
+            messagebox.showerror("Error", "User already exists.")
+        else:
+
+            execute_query(
+                "INSERT INTO users (user_id, username, password, user_type) VALUES (?, ?, ?, ?)",
+                (user_webmail, username, password, user_type)
+            )
+            messagebox.showinfo("Success", "Account created successfully!")
+            login_portal()
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=login_portal)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+
+    tk.Label(root, text="Create Your Account", font="Impact 35 bold", fg="#B75319", bg="#520D0D").pack(pady=(8, 0))
+    tk.Label(root, text="Please fill up the required information!", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(0, 10))
+
+    tk.Label(root, fg="#B75319", bg="#520D0D", font="Impact 15", text="User Type:").pack()
+    tk.Radiobutton(root, fg="#B75319", bg="#520D0D", font="Impact 12", text="Faculty", variable=user_type_var, value="Faculty").pack()
+    tk.Radiobutton(root, fg="#B75319", bg="#520D0D", font="Impact 12", text="Student", variable=user_type_var, value="Student").pack()
+
+    tk.Label(root, text="User Name:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 380), pady=5)
+    tk.Entry(root, textvariable=username_var, width=44, font=("Goudy old style", 15)).pack(padx=0, pady=5)
+
+    tk.Label(root, text="PUP Webmail:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 380), pady=5)
+    tk.Entry(root, textvariable=user_id_var, width=44, font=("Goudy old style", 15)).pack(padx=0, pady=5)
+
+    tk.Label(root, text="Password:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 415), pady=5)
+    tk.Entry(root, textvariable=password_var, width=44, show="*", font=("Goudy old style", 15)).pack(padx=(0), pady=5)
+
+    tk.Label(root, text="Confirm Password:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(10, 335), pady=5)
+    tk.Entry(root, textvariable=confirm_password_var, width=44, show="*", font=("Goudy old style", 15)).pack(padx=(0), pady=5)
+
+    tk.Button(root, text="Submit", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=save_account).pack(padx=500, pady=(10))
+
+
+
+def login_portal():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    tk.Label(root, text="WELCOME to Pychicks PUP PQ Special Rooms!", font=("Impact", 25), fg="#B75319", bg="#520D0D").pack(pady=(40, 20), fill="both")
+
+    frame_portal = Frame(root, bg="#DDA7B0", width=450, height=550)
+    frame_portal.pack(padx=150, pady=(20, 130), fill="both")
+
+    tk.Label(frame_portal, text="Are you a:", fg="#B75319", bg="#DDA7B0", font=("Impact", 25)).pack(pady=(10, 20), padx=(15,360), fill="both")
+    tk.Button(frame_portal, text="Student", command=student_portal, width=20, fg="#B75319", bg="#520D0D", font=("Impact", 15)).pack(pady=(20, 0),padx=100)
+    tk.Button(frame_portal, text="Faculty", command=faculty_portal, width=20, fg="#B75319", bg="#520D0D", font=("Impact", 15)).pack(pady=(20, 0),padx=100)
+    tk.Button(frame_portal, text="Create an Account", command=create_account, width=20, fg="#B75319", bg="#520D0D", font=("Impact", 8)).pack(pady=(10, 50), padx=(400, 10))
+
+
+def main_page():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    tk.Button(root, text="Reserve", command=reserve_page, width=20, bg="#B75319", fg="#520D0D",
+              font=("Impact", 15)).pack(pady=(200, 0), padx=100)
+    tk.Button(root, text="Your Reservations", command=view_reservation, width=20, bg="#B75319", fg="#520D0D",
+              font=("Impact", 15)).pack(pady=(20, 0), padx=100)
+    tk.Button(root, text="Profile", command=profile, width=20, bg="#B75319", fg="#520D0D",
+              font=("Impact", 15)).pack(pady=(20, 0), padx=100)
+
+def reserve_page():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=main_page)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+
+
+    tk.Label(root, font="Impact 20", fg="#B75319", bg="#520D0D", text="Room Type:").pack(pady=(30, 10))
+    room_var = tk.StringVar(value="Select Room")
+    tk.OptionMenu(root, room_var, "AVR", "COMLAB", "SCIENCE LAB").pack(pady=5)
+
+    calendar = Calendar(root, selectmode='day', date_pattern='yyyy-mm-dd')
+    calendar.pack(pady=(30, 8))
+
+    tk.Label(root, text="Time:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 415), pady=5)
+    time_entry = tk.Entry(root, font=("Goudy old style", 15))
+    time_entry.pack(pady=10)
+
+    tk.Label(root, text="Reason:", font="Impact 20", fg="#B75319", bg="#520D0D").pack(padx=(0, 415), pady=5)
+    reason_entry = tk.Entry(root, font=("Goudy old style", 15))
+    reason_entry.pack(pady=10)
+
+
+    def reserve():
+        room = room_var.get()
+        date = calendar.get_date()
+        time = time_entry.get()
+        reason = reason_entry.get()
+
+        if room == "Select Room" or not date or not time or not reason:
+            messagebox.showerror("Error", "All fields are required.")
+            return
+
+        user_webmail = "current_logged_in_user_webmail"
+
+        try:
+            existing_reservation = execute_query(
+                "SELECT * FROM reservations WHERE room = ? AND date = ? AND time = ?",
+                (room, date, time),
+                fetch=True
+            )
+            if existing_reservation:
+                messagebox.showerror(
+                    "Reservation Conflict",
+                    f"The {room} is already reserved on {date} at {time}."
+                )
+                return
+
+
+            execute_query(
+                "INSERT INTO reservations (user_id, room, date, time, reason) VALUES (?, ?, ?, ?, ?)",
+                (current_user_id, room, date, time, reason)
+            )
+            messagebox.showinfo("Success", f"{room} reserved successfully for {date} at {time}.")
+            view_reservation()
+        except Exception as e:
+            messagebox.showerror("Database Error", str(e))
+
+    tk.Button(root, text="Reserve", command=reserve, width=20, bg="#B75319", fg="#520D0D", font=("Impact", 15)).pack(pady=20)
+
+def view_reservation():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=main_page)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+
+    tk.Label(root, font="Impact 20", fg="#B75319", bg="#520D0D", text="Your Reservations").pack(pady=(30, 10), padx=400)
+
+    user_webmail = current_user_id
+
+    user_reservations = execute_query("SELECT room, date, time, reason FROM reservations WHERE user_id = ?", (user_webmail,), fetch=True)
+
+
+
+    if not user_reservations:
+        tk.Label(root, text="No reservations found.",font="Helvetica 20", fg="#B75319", bg="#520D0D").pack()
+    else:
+        for reservation in user_reservations:
+            tk.Label(root,
+                     text=f'''
+                        Room: {reservation[0]}
+                        Date: {reservation[1]}
+                        Time: {reservation[2]}''', font="Impact 12", fg="#B75319", bg="#520D0D").pack(padx=400)
+
+def profile():
+    print("Navigating to the Profile page...")
+    for widget in root.winfo_children():
+        widget.destroy()
+
+
+    back_button = tk.Button(root, text="Back", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=main_page)
+    back_button.pack(padx=(20, 1100), pady=(20, 0))
+    print("Back button created.")
+
+
+    if current_user_id is None:
+        print("Error: No user logged in.")
+        messagebox.showerror("Error", "No user is logged in.")
+        login_portal()
+        return
+
+    print("Fetching user information from database...")
+    user_info = execute_query(
+        "SELECT username, user_id, user_type FROM users WHERE user_id = ?",
+        (current_user_id,),
+        fetch=True
+    )
+    print("User Info:", user_info)
+
+    if user_info:
+        username = user_info[0][0]
+        user_webmail = user_info[0][1]
+        user_type = user_info[0][2]
+        print(f"Retrieved User: {username}, {user_webmail}, {user_type}")
+    else:
+        username = "Unknown"
+        user_webmail = "Unknown"
+        user_type = "Unknown"
+        print("No user profile found in the database.")
+        messagebox.showerror("Error", "User profile not found.")
+
+
+    tk.Label(root, text="Profile", font="Impact 35 bold", fg="#B75319", bg="#520D0D").pack(pady=(20, 10))
+    tk.Label(root, text=f"Username: {username}", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(10, 5))
+    tk.Label(root, text=f"Webmail: {user_webmail}", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(5, 5))
+    tk.Label(root, text=f"User Type: {user_type}", font="Impact 20", fg="#B75319", bg="#520D0D").pack(pady=(5, 20))
+    print("Profile information displayed.")
+
+
+    def log_out():
+        global current_user_id
+        print("Logging out user...")
+        current_user_id = None
+        login_portal()
+
+    tk.Button(root, text="Log Out", font=("Impact", 15), bg="#B75319", fg="#520D0D", command=log_out).pack(pady=(5, 20))
+    print("Log Out button created.")
+
+
+
+initialize_database()
+
+root = tk.Tk()
+root.title("Pychicks Room Reservation")
+root.geometry("800x550")
+root.config(background="#520D0D")
+
+login_portal()
+
+root.mainloop()
+tk.tk
+tk.tk
